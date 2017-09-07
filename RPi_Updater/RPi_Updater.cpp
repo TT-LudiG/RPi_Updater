@@ -1,29 +1,35 @@
-#include <chrono>
 #include <iostream>
-#include <thread>
 
-#include "FTPController.h"
+#include "BaseController.h"
 
-int main(int argc, char** argv)
+int main(int argc, char* argv[])
 {
-    FTPController* ftpControllerPtr = new FTPController();
+    BaseController* baseControllerPtr;
     
     try
     {
-        unsigned long int sessionID = ftpControllerPtr->startFTPControlSession("41.185.23.172", "RPi-Dev", "jacoistehbawsW00T!");
-        
-        ftpControllerPtr->startFTPDataSession(sessionID);
-        
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        
-        ftpControllerPtr->getFileWithFTPControlSession(sessionID);
+        baseControllerPtr = new BaseController();
     }
     
     catch (const std::exception& e)
-    {
-        std::cerr << e.what() << std::endl;
+    {      
+        if (baseControllerPtr != nullptr)
+            delete baseControllerPtr;
+        
+        return 1;
     }
     
-    if (ftpControllerPtr != nullptr)
-        delete ftpControllerPtr;
+    std::cout << "Enter 'q' (quit), 'e' (exit) or 'c' (close) to end the program..." << std::endl;
+    
+    std::string inputLine;
+    
+    std::getline(std::cin, inputLine);
+    
+    while ((inputLine != "q") && (inputLine != "e") && (inputLine != "c"))
+        std::getline(std::cin, inputLine);
+    
+    if (baseControllerPtr != nullptr)
+        delete baseControllerPtr;
+    
+    return 0;
 }

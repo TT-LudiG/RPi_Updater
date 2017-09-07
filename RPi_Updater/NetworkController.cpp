@@ -64,7 +64,7 @@ unsigned long int NetworkController::connectToServer(const std::string servernam
     
     freeaddrinfo(result);
     
-    // Set the socket timeout period.
+    // Set the socket timeout period (for the server-connect operation).
     
     struct timeval timeout;
     
@@ -103,15 +103,40 @@ unsigned long int NetworkController::connectToServer(const std::string servernam
         throw e;
     }
     
+    // Set the socket timeout period (for subsequent read/write operations).
+    
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 1;
+    
+    // REINTERPRET_CAST!
+
+    if (setsockopt(socketHandle, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<char*>(&timeout), sizeof(timeout)) < 0)
+    {
+        close(socketHandle);
+        
+        NetworkExceptions::SocketSetOptionException e(socketHandle, "SO_SNDTIMEO", std::string(std::strerror(errno)));
+        throw e;
+    }
+    
+    // REINTERPRET_CAST!
+    
+    if (setsockopt(socketHandle, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&timeout), sizeof(timeout)) < 0)
+    {
+        close(socketHandle);
+        
+        NetworkExceptions::SocketSetOptionException e(socketHandle, "SO_RCVTIMEO", std::string(std::strerror(errno)));
+        throw e;
+    }
+    
     _sessions.insert(std::pair<unsigned long int, SessionInfo*>(_nextSessionID, new SessionInfo(socketHandle, *socketAddress)));
     
     return _nextSessionID++;
 }
 
 void NetworkController::disconnectFromServer(const unsigned long int sessionID)
-{
+{ 
     if (_sessions.count(sessionID) > 0)
-    {
+    {      
         close(_sessions.at(sessionID)->SocketHandle);
         
         delete _sessions.at(sessionID);
@@ -131,9 +156,15 @@ long int NetworkController::sendBufferWithSession(const unsigned long int sessio
         bytesCount = write(socketHandle, static_cast<const void*>(inputBuffer), bufferLength);
         
         if (bytesCount < 0)
-        {
-            NetworkExceptions::SocketWriteException e(socketHandle, std::string(std::strerror(errno)));
-            throw e;
+        {          
+            if (errno == EAGAIN)
+                bytesCount = 0;
+            
+            else
+            {
+                NetworkExceptions::SocketWriteException e(socketHandle, std::string(std::strerror(errno)));
+                throw e;
+            }
         }
     }
     
@@ -152,8 +183,14 @@ long int NetworkController::receiveBufferWithSession(const unsigned long int ses
 	
         if (bytesCount < 0)
         {
-            NetworkExceptions::SocketReadException e(socketHandle, std::string(std::strerror(errno)));
-            throw e;
+            if (errno == EAGAIN)
+                bytesCount = 0;
+            
+            else
+            {
+                NetworkExceptions::SocketReadException e(socketHandle, std::string(std::strerror(errno)));
+                throw e;
+            }
         }
     }
     

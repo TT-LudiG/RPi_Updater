@@ -10,8 +10,6 @@ struct SessionFTPControlInfo
     const std::string Servername;
     const std::string Username;
     
-    unsigned long int SessionFTPDataID;
-    
     // Constructor.
     
     SessionFTPControlInfo(const unsigned long int sessionNetworkID, const std::string servername, const std::string username):
@@ -24,8 +22,7 @@ struct SessionFTPControlInfo
     SessionFTPControlInfo(const SessionFTPControlInfo& lref):
         SessionNetworkID(lref.SessionNetworkID),
         Servername(lref.Servername),
-        Username(lref.Username),
-        SessionFTPDataID(lref.SessionFTPDataID) {}
+        Username(lref.Username) {}
 };
 
 #endif

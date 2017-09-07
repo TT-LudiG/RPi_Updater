@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstring>
+#include <fstream>
 #include <thread>
 
 #include "FTPController.h"
@@ -7,32 +8,23 @@
 
 #include <iostream>
 
-FTPController::FTPController() : _nextSessionFTPControlID(0), _nextSessionFTPDataID(0)
+FTPController::FTPController() : _nextSessionFTPControlID(0)
 {
     _networkControllerPtr = new NetworkController();
 }
 
 FTPController::~FTPController()
 {
+    std::unordered_map<unsigned long int, SessionFTPControlInfo*>::const_iterator it;
+    
+    for (it = _sessionsFTPControl.begin(); it != _sessionsFTPControl.end(); ++it)
     {
-        std::unordered_map<unsigned long int, unsigned long int>::const_iterator it;
-    
-        for (it = _sessionsFTPData.begin(); it != _sessionsFTPData.end(); ++it)
-            _networkControllerPtr->disconnectFromServer(it->second);
-    }
-    
-    {
-        std::unordered_map<unsigned long int, SessionFTPControlInfo*>::const_iterator it;
-    
-        for (it = _sessionsFTPControl.begin(); it != _sessionsFTPControl.end(); ++it)
-        {
-            if (it->second == nullptr)
-                continue;
-            
-            _networkControllerPtr->disconnectFromServer(it->second->SessionNetworkID);
-            
-            delete it->second;
-        }
+        if (it->second == nullptr)
+            continue;
+        
+        _networkControllerPtr->disconnectFromServer(it->second->SessionNetworkID);
+        
+        delete it->second;
     }
     
     if (_networkControllerPtr != nullptr)
@@ -43,18 +35,19 @@ unsigned long int FTPController::startFTPControlSession(const std::string server
 {
     unsigned long int sessionNetworkID;
     
+    std::string message;
     unsigned short int statusCode;
     
-    unsigned char responseBuffer[FTP_MESSAGE_LENGTH_MAX];
+    unsigned char buffer[FTP_MESSAGE_LENGTH_MAX];
+    unsigned long int bufferLength;
     
+    unsigned char responseBuffer[FTP_MESSAGE_LENGTH_MAX];
     long int responseBufferLength = -1;
     
-    std::string message = "USER " + username + "\n";
+    // Send username info, with USER command.
     
-    unsigned char buffer[FTP_MESSAGE_LENGTH_MAX];
-    
-    unsigned long int bufferLength = message.length();
-    
+    message = "USER " + username + "\n";
+    bufferLength = message.length();
     std::memcpy(static_cast<void*>(buffer), static_cast<const void*>(message.c_str()), bufferLength);
 
     sessionNetworkID = _networkControllerPtr->connectToServer(servername, "21");
@@ -62,7 +55,7 @@ unsigned long int FTPController::startFTPControlSession(const std::string server
     _networkControllerPtr->sendBufferWithSession(sessionNetworkID, buffer, bufferLength);
                 
     std::this_thread::sleep_for(std::chrono::seconds(1));
-        
+    
     responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
     
     if (responseBufferLength <= 0)
@@ -72,7 +65,7 @@ unsigned long int FTPController::startFTPControlSession(const std::string server
     }
     
     std::stringstream responseStream(std::string(responseBuffer, responseBuffer + responseBufferLength));
-        
+    
     std::string lineCurrent;
         
     for (unsigned short int i = 0; i < 4; ++i)
@@ -85,20 +78,20 @@ unsigned long int FTPController::startFTPControlSession(const std::string server
         FTPExceptions::LoginStatusException e(servername, username, statusCode);
         throw e;
     }
-        
+    
+    // Send password info, with PASS command.
+    
     std::memset(static_cast<void*>(buffer), 0, bufferLength);
     std::memset(static_cast<void*>(responseBuffer), 0, responseBufferLength);
         
     message = "PASS " + password + "\n";
-        
     bufferLength = message.length();
-        
     std::memcpy(static_cast<void*>(buffer), static_cast<const void*>(message.c_str()), bufferLength);
-        
+    
     _networkControllerPtr->sendBufferWithSession(sessionNetworkID, buffer, bufferLength);
-        
+    
     std::this_thread::sleep_for(std::chrono::seconds(1));
-        
+    
     responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
     
     if (responseBufferLength <= 0)
@@ -120,20 +113,25 @@ unsigned long int FTPController::startFTPControlSession(const std::string server
     return _nextSessionFTPControlID++;
 }
 
-void FTPController::startFTPDataSession(const unsigned long int sessionFTPControlID)
+unsigned short int FTPController::getFTPDataPort(const unsigned long int sessionFTPControlID) const
 {
+    unsigned short int port;
+    
     SessionFTPControlInfo sessionFTPControlInfo = *_sessionsFTPControl.at(sessionFTPControlID);
     
-    unsigned char responseBuffer[FTP_MESSAGE_LENGTH_MAX];
+    std::string message;
+    unsigned short int statusCode;
     
+    unsigned char buffer[FTP_MESSAGE_LENGTH_MAX];   
+    unsigned long int bufferLength;
+    
+    unsigned char responseBuffer[FTP_MESSAGE_LENGTH_MAX];    
     long int responseBufferLength = -1;
     
-    std::string message = "PASV\n";
+    // Request server-side passive-mode ports, with PASV command.
     
-    unsigned char buffer[FTP_MESSAGE_LENGTH_MAX];
-    
-    unsigned long int bufferLength = message.length();
-    
+    message = "PASV\n";   
+    bufferLength = message.length();   
     std::memcpy(static_cast<void*>(buffer), static_cast<const void*>(message.c_str()), bufferLength);
                 
     _networkControllerPtr->sendBufferWithSession(sessionFTPControlInfo.SessionNetworkID, buffer, bufferLength);
@@ -148,13 +146,15 @@ void FTPController::startFTPDataSession(const unsigned long int sessionFTPContro
         throw e;
     }
      
-    unsigned short int statusCode = getStatusCode(std::string(responseBuffer, responseBuffer + responseBufferLength));
+    statusCode = getStatusCode(std::string(responseBuffer, responseBuffer + responseBufferLength));
         
     if (statusCode != 227)
-    {            
+    {
         FTPExceptions::PassiveModeStatusException e(sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username, statusCode);
         throw e;
     }
+    
+    // Get server-side passive-mode port from response.
         
     std::string responseString = std::string(responseBuffer, responseBuffer + responseBufferLength);
         
@@ -180,50 +180,239 @@ void FTPController::startFTPDataSession(const unsigned long int sessionFTPContro
             byte2 = static_cast<unsigned char>(std::stoul(token));
     }
     
-    unsigned short int port = (byte1 * 256) + byte2;
+    port = (byte1 * 256) + byte2;
     
-    std::stringstream portStream;
-    
-    portStream << port;
-        
-    unsigned long int sessionNetworkID = _networkControllerPtr->connectToServer(sessionFTPControlInfo.Servername, portStream.str());
-    
-    // Register new FTP data session.
-        
-    _sessionsFTPData.insert(std::pair<unsigned long int, unsigned long int>(_nextSessionFTPDataID, sessionNetworkID));
-        
-    _sessionsFTPControl.at(sessionFTPControlID)->SessionFTPDataID = _nextSessionFTPDataID++;
+    return port;
 }
 
-void FTPController::getFileWithFTPControlSession(unsigned long int sessionFTPControlID)
+void FTPController::getFileWithFTPControlSession(unsigned long int sessionFTPControlID, const std::string fileRemotePath, const std::string filePath) const
 {
-    unsigned long int sessionFTPDataID = _sessionsFTPControl.at(sessionFTPControlID)->SessionFTPDataID;    
-    unsigned long int sessionNetworkID = _sessionsFTPData.at(sessionFTPDataID);
+    unsigned char* fileBuffer = nullptr;
+    unsigned long int fileLength;
     
-    unsigned char responseBuffer[FTP_MESSAGE_LENGTH_MAX];
+    unsigned long int fileRemoteLength;
     
-    long int responseBufferLength = -1;
+    SessionFTPControlInfo sessionFTPControlInfo = *_sessionsFTPControl.at(sessionFTPControlID);
+    unsigned long int sessionNetworkID;
     
-    std::string message = "LIST\n";
+    std::string message;
+    unsigned short int statusCode;
     
     unsigned char buffer[FTP_MESSAGE_LENGTH_MAX];
+    unsigned long int bufferLength;
     
-    unsigned long int bufferLength = message.length();
+    unsigned char responseBuffer[FTP_MESSAGE_LENGTH_MAX];
+    long int responseBufferLength = -1;
     
+    std::stringstream responseStream;
+    
+    // Set the file-transfer mode to binary, with TYPE I command.
+        
+    message = "TYPE I\n";
+    bufferLength = message.length();       
     std::memcpy(static_cast<void*>(buffer), static_cast<const void*>(message.c_str()), bufferLength);
-                
-    _networkControllerPtr->sendBufferWithSession(sessionNetworkID, buffer, bufferLength);
-                
+        
+    _networkControllerPtr->sendBufferWithSession(sessionFTPControlInfo.SessionNetworkID, buffer, bufferLength);
+        
     std::this_thread::sleep_for(std::chrono::seconds(1));
         
-    responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
+    responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionFTPControlInfo.SessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
     
-    std::string responseString = std::string(responseBuffer, responseBuffer + responseBufferLength);
+    if (responseBufferLength <= 0)
+    {
+        FTPExceptions::BinaryModeResponseException e(sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username);
+        throw e;
+    }
     
-    std::cout << responseString << std::endl;
+    statusCode = getStatusCode(std::string(responseBuffer, responseBuffer + responseBufferLength));
+        
+    if (statusCode != 200)
+    {
+        FTPExceptions::BinaryModeStatusException e(sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username, statusCode);
+        throw e;
+    }
+    
+    // Get the size of the remote file, with SIZE command.
+    
+    std::memset(static_cast<void*>(buffer), 0, bufferLength);
+    std::memset(static_cast<void*>(responseBuffer), 0, responseBufferLength);
+        
+    message = "SIZE " + fileRemotePath + "\n";
+    bufferLength = message.length();
+    std::memcpy(static_cast<void*>(buffer), static_cast<const void*>(message.c_str()), bufferLength);
+        
+    _networkControllerPtr->sendBufferWithSession(sessionFTPControlInfo.SessionNetworkID, buffer, bufferLength);
+        
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+    responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionFTPControlInfo.SessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
+    
+    if (responseBufferLength <= 0)
+    {
+        FTPExceptions::GetSizeResponseException e(fileRemotePath, sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username);
+        throw e;
+    }
+    
+    responseStream.str(std::string(responseBuffer, responseBuffer + responseBufferLength));
+    
+    responseStream >> statusCode;
+    
+    if (statusCode != 213)
+    {       
+        FTPExceptions::GetSizeStatusException e(fileRemotePath, sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username, statusCode);
+        throw e;
+    }
+    
+    responseStream >> fileRemoteLength;
+    
+    // Connect to a server-side passive-mode port.
+    
+    std::stringstream portStream;   
+    portStream << getFTPDataPort(sessionFTPControlID);
+    sessionNetworkID = _networkControllerPtr->connectToServer(sessionFTPControlInfo.Servername, portStream.str());
+    
+    // Retrieve the specified file, with RETR command.
+    
+    std::memset(static_cast<void*>(buffer), 0, bufferLength);
+    std::memset(static_cast<void*>(responseBuffer), 0, responseBufferLength);
+    
+    message = "RETR " + fileRemotePath + "\n";
+    bufferLength = message.length();
+    std::memcpy(static_cast<void*>(buffer), static_cast<const void*>(message.c_str()), bufferLength);
+    
+    _networkControllerPtr->sendBufferWithSession(sessionFTPControlInfo.SessionNetworkID, buffer, bufferLength);
+    
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    
+    responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionFTPControlInfo.SessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
+    
+    if (responseBufferLength <= 0)
+    {
+        _networkControllerPtr->disconnectFromServer(sessionNetworkID);
+        
+        FTPExceptions::GetFileResponseException e(fileRemotePath, sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username);
+        throw e;
+    }
+    
+    responseStream.clear();
+    responseStream.str(std::string(responseBuffer, responseBuffer + responseBufferLength));
+    
+    std::string lineCurrent;
+    
+    std::getline(responseStream, lineCurrent);
+    
+    statusCode = getStatusCode(lineCurrent);
+    
+    if (statusCode != 150)
+    {
+        _networkControllerPtr->disconnectFromServer(sessionNetworkID);
+        
+        FTPExceptions::GetFileStatusException e(fileRemotePath, sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username, statusCode);
+        throw e;
+    }
+    
+    bool isDone = false;
+    
+    while (std::getline(responseStream, lineCurrent))
+    {
+        statusCode = getStatusCode(lineCurrent);
+        
+        if (statusCode == 226)
+            isDone = true;
+        
+        else
+        {
+            FTPExceptions::GetFileStatusException e(fileRemotePath, sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username, statusCode);
+            throw e;
+        }
+    }
+    
+    std::memset(static_cast<void*>(responseBuffer), 0, responseBufferLength);
+    
+    // File-transfer loop.
+    
+    fileBuffer = new unsigned char[FTP_FILE_LENGTH_MAX];
+    fileLength = 0;
+    
+    try
+    {
+        do
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            
+            responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
+        
+            if (responseBufferLength > 0)
+            {           
+                std::memcpy(static_cast<void*>(fileBuffer + fileLength), static_cast<void*>(responseBuffer), responseBufferLength);
+            
+                fileLength += responseBufferLength;
+            
+                std::memset(static_cast<void*>(responseBuffer), 0, responseBufferLength);
+            }
+            
+            try
+            {
+                unsigned char ping[1]{0};
+        
+                _networkControllerPtr->sendBufferWithSession(sessionNetworkID, ping, 1);
+            }
+            
+            catch (const std::exception&)
+            {
+                responseBufferLength = _networkControllerPtr->receiveBufferWithSession(sessionFTPControlInfo.SessionNetworkID, responseBuffer, FTP_MESSAGE_LENGTH_MAX);
+        
+                if (responseBufferLength > 0)
+                {
+                    statusCode = getStatusCode(std::string(responseBuffer, responseBuffer + responseBufferLength));
+                    
+                    if (statusCode == 226)
+                        isDone = true;
+            
+                    else
+                    {
+                        FTPExceptions::GetFileStatusException e(fileRemotePath, sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username, statusCode);
+                        throw e;
+                    }
+                }
+            }
+            
+            if ((isDone) && (fileLength != fileRemoteLength))
+            {
+                FTPExceptions::GetFileSizeException e(fileRemotePath, sessionFTPControlInfo.Servername, sessionFTPControlInfo.Username);
+                throw e;
+            }
+        }
+        while (!isDone);
+    }
+    
+    catch (const std::exception& e)
+    {     
+        if (fileBuffer != nullptr)
+            delete[] fileBuffer;
+        
+        _networkControllerPtr->disconnectFromServer(sessionNetworkID);
+        
+        throw e;
+    }
+    
+    _networkControllerPtr->disconnectFromServer(sessionNetworkID);
+    
+    // Write the retrieved file to disk.
+    
+    std::ofstream file(filePath, std::ofstream::binary);
+    
+    // REINTERPRET_CAST!
+    
+    file.write(reinterpret_cast<char*>(fileBuffer), fileLength);
+    
+    file.close();
+    
+    if (fileBuffer != nullptr)
+        delete[] fileBuffer;
 }
 
-unsigned short int FTPController::getStatusCode(const std::string response) const
+unsigned short int FTPController::getStatusCode(const std::string response)
 {
     return static_cast<unsigned short int>(std::stoul(response.substr(0, 3)));
 }
