@@ -4,15 +4,17 @@
 
 int main(int argc, char* argv[])
 {
-    BaseController* baseControllerPtr;
+    BaseController* baseControllerPtr = nullptr;
     
     try
-    {
+    {      
         baseControllerPtr = new BaseController();
     }
     
     catch (const std::exception& e)
-    {      
+    {
+        std::cerr << e.what() << std::endl;
+        
         if (baseControllerPtr != nullptr)
             delete baseControllerPtr;
         

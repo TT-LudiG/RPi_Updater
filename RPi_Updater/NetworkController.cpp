@@ -13,20 +13,11 @@
 #include "NetworkController.h"
 #include "NetworkExceptions.h"
 
-NetworkController::NetworkController(void):
-    _nextSessionID(0) {}
+NetworkController::NetworkController(void): _nextSessionID(0) {}
 
 NetworkController::~NetworkController(void)
 {
-    std::unordered_map<unsigned long int, SessionInfo*>::const_iterator it;
-    
-    for (it = _sessions.begin(); it != _sessions.end(); ++it)
-    {
-        disconnectFromServer(it->first);
-        
-        if (it->second != nullptr)
-            delete it->second;
-    }
+    disconnectFromServerAll();
 }
 
 unsigned long int NetworkController::connectToServer(const std::string servername, const std::string port)
@@ -42,7 +33,7 @@ unsigned long int NetworkController::connectToServer(const std::string servernam
     unsigned long int status = getaddrinfo(servername.c_str(), port.c_str(), nullptr, &result);
     
     if (status != 0)
-    {       
+    {
         NetworkExceptions::ServerLookupException e(servername, std::string(gai_strerror(status)));
         throw e;
     }
@@ -55,7 +46,7 @@ unsigned long int NetworkController::connectToServer(const std::string servernam
     socketHandle = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
     
     if (socketHandle < 0)
-    {       
+    {
         NetworkExceptions::SocketCreateException e(socketHandle, std::string(std::strerror(errno)));
         throw e;
     }
@@ -96,7 +87,7 @@ unsigned long int NetworkController::connectToServer(const std::string servernam
     // REINTERPRET_CAST!
 	
     if (connect(socketHandle, reinterpret_cast<const struct sockaddr*>(socketAddress), sizeof(*socketAddress)) < 0)
-    {       
+    {
         close(socketHandle);
         
         NetworkExceptions::ServerConnectException e(servername, port, std::string(std::strerror(errno)));
@@ -139,9 +130,25 @@ void NetworkController::disconnectFromServer(const unsigned long int sessionID)
     {      
         close(_sessions.at(sessionID)->SocketHandle);
         
-        delete _sessions.at(sessionID);
+        if (_sessions.at(sessionID) != nullptr)
+            delete _sessions.at(sessionID);
         
         _sessions.erase(sessionID);
+    }
+}
+
+void NetworkController::disconnectFromServerAll(void)
+{
+    std::unordered_map<unsigned long int, SessionInfo*>::iterator it;
+    
+    for (it = _sessions.begin(); it != _sessions.end();)
+    {     
+        close(_sessions.at(it->first)->SocketHandle);
+        
+        if (_sessions.at(it->first) != nullptr)
+            delete _sessions.at(it->first);
+        
+        it = _sessions.erase(it);
     }
 }
 
@@ -153,10 +160,10 @@ long int NetworkController::sendBufferWithSession(const unsigned long int sessio
     {
         long int socketHandle = _sessions.at(sessionID)->SocketHandle;
         
-        bytesCount = write(socketHandle, static_cast<const void*>(inputBuffer), bufferLength);
+        bytesCount = send(socketHandle, static_cast<const void*>(inputBuffer), bufferLength, MSG_NOSIGNAL);
         
         if (bytesCount < 0)
-        {          
+        {
             if (errno == EAGAIN)
                 bytesCount = 0;
             

@@ -18,7 +18,7 @@ private:
     
     unsigned long int _nextSessionFTPControlID;
     
-    unsigned short int getFTPDataPort(const unsigned long int sessionFTPControlID) const;
+    unsigned short int getFTPDataPort(const unsigned long int sessionFTPControlID, const unsigned long int responseWaitInMs) const;
     
     static unsigned short int getStatusCode(const std::string response);
     
@@ -26,9 +26,9 @@ public:
     FTPController(void);
     ~FTPController(void);
     
-    unsigned long int startFTPControlSession(const std::string servername, const std::string username, const std::string password);
+    unsigned long int startFTPControlSession(const std::string servername, const std::string username, const std::string password, const unsigned long int responseWaitInMs);
     
-    void getFileWithFTPControlSession(unsigned long int sessionFTPControlID, const std::string filePathRemote, const std::string filePathLocal) const;
+    void getFileWithFTPControlSession(const unsigned long int sessionFTPControlID, const std::string filePathRemote, const std::string filePathLocal, const unsigned long int responseWaitInMs, const unsigned long int packetWaitInMs) const;
 };
 
 #endif

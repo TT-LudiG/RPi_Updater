@@ -279,7 +279,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_10: Inconsistency between remote and local filesize for file: " << _filePath << ", at server: " << _servername << ", with username: ";
+            messageStream << "EXCEPTION_NET_FTP_10: Inconsistency between remote and local filesize for file: " << _filePath << ", at server: " << _servername << ", with username: " << _username;
 		
             return messageStream.str().c_str();
         }
