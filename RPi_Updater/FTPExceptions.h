@@ -24,7 +24,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_0: Failed to login to server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
+            messageStream << "EXCEPTION_FTP_0: Failed to login to server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
 		
             return messageStream.str().c_str();
         }
@@ -50,7 +50,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_1: Failed to login to server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
+            messageStream << "EXCEPTION_FTP_1: Failed to login to server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
 		
             return messageStream.str().c_str();
         }
@@ -73,7 +73,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_2: Failed to retrieve a passive FTP port from server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
+            messageStream << "EXCEPTION_FTP_2: Failed to retrieve a passive FTP port from server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
 		
             return messageStream.str().c_str();
         }
@@ -99,7 +99,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_3: Failed to retrieve a passive FTP port from server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
+            messageStream << "EXCEPTION_FTP_3: Failed to retrieve a passive FTP port from server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
 		
             return messageStream.str().c_str();
         }
@@ -122,7 +122,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_4: Failed to set binary file-transfer mode for server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
+            messageStream << "EXCEPTION_FTP_4: Failed to set binary file-transfer mode for server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
 		
             return messageStream.str().c_str();
         }
@@ -148,7 +148,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_5: Failed to set binary file-transfer mode for server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
+            messageStream << "EXCEPTION_FTP_5: Failed to set binary file-transfer mode for server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
 		
             return messageStream.str().c_str();
         }
@@ -173,7 +173,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_6: Failed to retrieve filesize for file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
+            messageStream << "EXCEPTION_FTP_6: Failed to retrieve filesize for file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
 		
             return messageStream.str().c_str();
         }
@@ -201,7 +201,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_7: Failed to retrieve filesize for file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
+            messageStream << "EXCEPTION_FTP_7: Failed to retrieve filesize for file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
 		
             return messageStream.str().c_str();
         }
@@ -226,7 +226,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_8: Failed to retrieve file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
+            messageStream << "EXCEPTION_FTP_8: Failed to retrieve file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << " (NO RESPONSE)";
 		
             return messageStream.str().c_str();
         }
@@ -254,7 +254,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_9: Failed to retrieve file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
+            messageStream << "EXCEPTION_FTP_9: Failed to retrieve file: " << _filePath << ", at server: " << _servername << ", with username: " << _username << ". Status code: " << _statusCode;
 		
             return messageStream.str().c_str();
         }
@@ -279,7 +279,7 @@ namespace FTPExceptions
         {
             std::stringstream messageStream;
             
-            messageStream << "EXCEPTION_NET_FTP_10: Inconsistency between remote and local filesize for file: " << _filePath << ", at server: " << _servername << ", with username: " << _username;
+            messageStream << "EXCEPTION_FTP_10: Inconsistency between remote and local filesize for file: " << _filePath << ", at server: " << _servername << ", with username: " << _username;
 		
             return messageStream.str().c_str();
         }

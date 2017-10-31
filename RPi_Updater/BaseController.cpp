@@ -14,11 +14,11 @@
 #include "HTTPRequest_GET.h"
 #include "HTTPRequest_POST.h"
 
-BaseController::BaseController(const std::string servername, const std::string port_general, const std::string port_temperature, const unsigned long int delay_updater_loop_in_sec):
-    _servername(servername),
+BaseController::BaseController(const std::string servername_general, const std::string port_general, const unsigned long int delay_updater_loop_in_sec, const std::string name_common_prefix):
+    _servername_general(servername_general),
     _port_general(port_general),
-    _port_temperature(port_temperature),
     _delay_updater_loop_in_sec(delay_updater_loop_in_sec),
+    _name_common_prefix(name_common_prefix),
     _networkControllerPtr(nullptr),
     _ftpControllerPtr(nullptr)
 {
@@ -29,7 +29,7 @@ BaseController::BaseController(const std::string servername, const std::string p
     
     catch (const std::exception& e)
     {
-        logToFileWithSubdirectory(e, "Network");
+        logToFileWithSubdirectory(e.what(), "Network");
         
         throw e;
     }
@@ -41,7 +41,7 @@ BaseController::BaseController(const std::string servername, const std::string p
     
     catch (const std::exception& e)
     {
-        logToFileWithSubdirectory(e, "FTP");
+        logToFileWithSubdirectory(e.what(), "FTP");
         
         throw e;
     }
@@ -106,53 +106,90 @@ void BaseController::checkUpdatesPeriodically(void)
     
     lock.unlock();
     
+    bool isConfiguredOpenVPN = true;
+    
+    std::stringstream nameCommonStream(_name_common_prefix);
+    
     // First attempt to get the ID.
     
     _id = getID();
     
+    if (_id > 0)
+        nameCommonStream << _id;
+    
     while (!_isDone)
-    {
+    {    
         // Subsequent attempts to get the ID, if not yet found.
         
         if (_id == 0)
+        {
             _id = getID();
+            
+            if (_id > 0)
+                nameCommonStream << _id;
+        }
         
         else
         {
-            // Send a VPN security certificate and key request to the ThermoTrack_API_BLE_General Web API.
-            
+            // Check whether or not VPN files need to be updated (via the ThermoTrack_API_BLE_General Web API).
+        
             std::stringstream uriStream;
-            uriStream << "/api/blereaders/vpn" << _id;
+            uriStream << "/api/blereaders/update/" << _id << "/vpn";        
+            HTTPResponse response = sendGETToServerURI(_servername_general, _port_general, uriStream.str(), 2000);
+        
+            std::string mustUpdateVPNFiles = std::string(response.content, response.content + response.contentLength);
             
-            HTTPResponse response = sendGETToServerURI(_servername, _port_general, uriStream.str(), 2000);
-            
-            if ((response.statusCode == 200) && (response.contentLength > 0))
+            if (mustUpdateVPNFiles == "true")
             {
-                std::string isReadyVPNFiles = std::string(response.content, response.content + response.contentLength);
+                isConfiguredOpenVPN = false;
                 
-                if (isReadyVPNFiles == "false")
-                    continue;
-                
-                std::stringstream nameCommonStream;
-                nameCommonStream << "client-rpi-ble-" << _id;
-
-                unsigned long int sessionID = _ftpControllerPtr->startFTPControlSession(_servername, "RPi-Dev", "jacoistehbawsW00T!", 500);
+                unsigned long int sessionID = _ftpControllerPtr->startFTPControlSession(_servername_general, "RPi-Dev", "jacoistehbawsW00T!", 2000);
     
-                _ftpControllerPtr->getFileWithFTPControlSession(sessionID, "TT_BLE/VPN/" + nameCommonStream.str() + ".crt", "//home/pi/" + nameCommonStream.str() + ".crt", 500, 10);
-    
-//                runBashCommandWithOutput("sudo tar -xzvf //home/pi/RPi_BLE_Scanner.tar.gz -C //home/pi/");
+                try
+                {
+                    _ftpControllerPtr->getFileWithFTPControlSession(sessionID, "TT_BLE/VPN/" + nameCommonStream.str() + ".crt", "//etc/openvpn/" + nameCommonStream.str() + ".crt", 2000, 10);
+                    _ftpControllerPtr->getFileWithFTPControlSession(sessionID, "TT_BLE/VPN/" + nameCommonStream.str() + ".key", "//etc/openvpn/" + nameCommonStream.str() + ".key", 2000, 10);
+                    
+                    std::stringstream bodyStream;        
+                    bodyStream << "{\"Update\": false}";               
+                    sendPOSTToServerURI(_servername_general, _port_general, uriStream.str(), bodyStream.str(), 2000);
+                }
+                    
+                catch (const std::exception& e)
+                {
+                    logToFileWithSubdirectory(e.what(), "FTP");
+                }
             }
+            
+            else if (!isConfiguredOpenVPN)
+            {
+                isConfiguredOpenVPN = configureOpenVPN(nameCommonStream.str(), "//etc/openvpn", "client-rpi.conf");
+            
+                if (isConfiguredOpenVPN)          
+                    logToFileWithSubdirectory("REBOOT_OPENVPN", "Base");
+            }
+        
+            else if ((!fileExists("//etc/openvpn", nameCommonStream.str() + ".crt")) || (!fileExists("//etc/openvpn", nameCommonStream.str() + ".key")))
+            {
+                // Send a VPN security certificate and key request to the server (via the ThermoTrack_API_BLE_General Web API).
+            
+                std::stringstream uriStream;
+                uriStream << "/api/blereaders/vpn/" << _id;       
+                sendGETToServerURI(_servername_general, _port_general, uriStream.str(), 2000);
+            }
+        
+//            runBashCommandWithOutput("sudo tar -xzvf //home/pi/RPi_BLE_Scanner.tar.gz -C //home/pi/");
         }
         
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         
         _isWaiting = true;
-            
+        
         lock.lock();
 
         while (!_isReady)
             _cv.wait(lock);
-            
+        
         _hasWoken = true;
         
         lock.unlock();
@@ -217,7 +254,7 @@ unsigned long int BaseController::getID(void) const
     
     std::string uri = "/api/blereaders/" + getMACAddress();
     
-    HTTPResponse response = sendGETToServerURI(_servername, _port_general, uri, 2000);
+    HTTPResponse response = sendGETToServerURI(_servername_general, _port_general, uri, 2000);
     
     // Write the ReaderID response to the config file.
     
@@ -262,7 +299,7 @@ HTTPResponse BaseController::sendGETToServerURI(const std::string servername, co
             
     catch (const std::exception& e)
     {
-        logToFileWithSubdirectory(e, "Network");
+        logToFileWithSubdirectory(e.what(), "Network");
     }
     
     if (responseBufferLength > 0)
@@ -308,7 +345,7 @@ HTTPResponse BaseController::sendPOSTToServerURI(const std::string servername, c
             
     catch (const std::exception& e)
     {
-        logToFileWithSubdirectory(e, "Network");
+        logToFileWithSubdirectory(e.what(), "Network");
     }
     
     if (responseBufferLength > 0)
@@ -317,7 +354,81 @@ HTTPResponse BaseController::sendPOSTToServerURI(const std::string servername, c
     return response;
 }
 
-void BaseController::logToFileWithSubdirectory(const std::exception& e, const std::string subdirectoryName)
+bool BaseController::configureOpenVPN(const std::string commonName, const std::string directoryPath, const std::string fileName)
+{
+    std::string filePath = directoryPath + "/" + fileName;
+
+    std::ifstream fileConfigInput(filePath);
+    
+    std::stringstream outputStream;
+    
+    if (!fileConfigInput.is_open())
+        return false;
+    
+    std::string inputLine;
+        
+    while (std::getline(fileConfigInput, inputLine))
+    {
+        std::string outputLine = inputLine;
+        
+        std::stringstream lineStream(inputLine);
+        
+        std::string token;
+            
+        std::getline(lineStream, token, ' ');
+        
+        if (token == "cert")
+            outputLine = "cert " + directoryPath + "/" + commonName + ".crt";
+        
+        else if (token == "key")
+            outputLine = "key " + directoryPath + "/" + commonName + ".key";
+        
+        outputStream << outputLine << std::endl;
+    }
+    
+    fileConfigInput.close();
+    
+    std::ofstream fileConfigOutput(filePath);
+    
+    if (!fileConfigOutput.is_open())
+        return false;
+    
+    fileConfigOutput << outputStream.rdbuf();
+    
+    return true;
+}
+
+bool BaseController::fileExists(const std::string directoryName, const std::string fileName)
+{
+    bool fileExists = false;
+    
+    DIR* directoryPtr = opendir(directoryName.c_str());
+    
+    if (directoryPtr != nullptr)
+    {
+        struct dirent* directoryEntryPtr = readdir(directoryPtr);
+        
+        while (directoryEntryPtr != nullptr)
+        {
+            std::string fileNamTemp = std::string(directoryEntryPtr->d_name);
+            
+            if (fileNamTemp == fileName)
+            {
+                fileExists = true;
+                
+                break;
+            }
+            
+            directoryEntryPtr = readdir(directoryPtr);
+        }
+        
+        closedir(directoryPtr);
+    }
+    
+    return fileExists;
+}
+
+void BaseController::logToFileWithSubdirectory(const std::string message, const std::string subdirectoryName)
 {
     std::stringstream fileLogNameStream;
         
@@ -327,13 +438,13 @@ void BaseController::logToFileWithSubdirectory(const std::exception& e, const st
     mkdir("//home/pi/LOGS", 0755);
     mkdir("//home/pi/LOGS/RPi_Updater", 0755);
     mkdir(fileLogNameStream.str().c_str(), 0755);
-        
+    
     fileLogNameStream << "/" << getTimeString_Now("%F_%T") << ".log";
-        
+    
     std::ofstream fileLog(fileLogNameStream.str());
     
     if (fileLog.is_open())
-        fileLog << e.what() << std::endl;
+        fileLog << message << std::endl;
         
     fileLog.close();
 }

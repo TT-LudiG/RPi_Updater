@@ -61,7 +61,7 @@ unsigned long int FTPController::startFTPControlSession(const std::string server
     std::stringstream responseStream(std::string(responseBuffer, responseBuffer + responseBufferLength));
     
     std::string lineCurrent;
-        
+    
     for (unsigned short int i = 0; i < 4; ++i)
         std::getline(responseStream, lineCurrent);
         

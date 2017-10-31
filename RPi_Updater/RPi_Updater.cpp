@@ -4,17 +4,17 @@
 
 #include "BaseController.h"
 
-#define SERVERNAME "vpn-wa-a.thermotrack.co.za"
+#define SERVERNAME_GENERAL "vpn-wa-a.thermotrack.co.za"
 #define PORT_GENERAL "49996"
-#define PORT_TEMPERATURE "49995"
 #define DELAY_UPDATER_LOOP_IN_SEC 300;
+#define NAME_COMMON_PREFIX "client-rpi-ble-"
 
 int main(int argc, char* argv[])
 {
-    std::string servername = SERVERNAME;
+    std::string servername_general = SERVERNAME_GENERAL;
     std::string port_general = PORT_GENERAL;
-    std::string port_temperature = PORT_TEMPERATURE;
     unsigned long int delay_updater_loop_in_sec = DELAY_UPDATER_LOOP_IN_SEC;
+    std::string name_common_prefix = NAME_COMMON_PREFIX;
     
     std::string currentParam;
     
@@ -39,17 +39,17 @@ int main(int argc, char* argv[])
                 std::string token = currentParam.substr(0, indexEqualsChar);
                 std::string value = currentParam.substr(indexEqualsChar + 1);
                 
-                if (token == "-servername")
-                    servername = value;
+                if (token == "-servername_general")
+                    servername_general = value;
                 
                 else if (token == "-port_general")
                     port_general = value;
                 
-                else if (token == "-port_temperature")
-                    port_temperature = value;
-                
                 else if (token == "-delay_updater_loop_in_sec")
                     delay_updater_loop_in_sec = std::stoul(value);
+                
+                else if (token == "-name_common_prefix")
+                    name_common_prefix = value;
             }
         }
     }
@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
     
     try
     {      
-        baseControllerPtr = new BaseController(servername, port_general, port_temperature, delay_updater_loop_in_sec);
+        baseControllerPtr = new BaseController(servername_general, port_general, delay_updater_loop_in_sec, name_common_prefix);
     }
     
     catch (const std::exception& e)
