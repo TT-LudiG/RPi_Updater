@@ -108,7 +108,8 @@ void BaseController::checkUpdatesPeriodically(void)
     
     bool isConfiguredOpenVPN = true;
     
-    std::stringstream nameCommonStream(_name_common_prefix);
+    std::stringstream nameCommonStream;
+    nameCommonStream << _name_common_prefix;
     
     // First attempt to get the ID.
     
@@ -118,7 +119,7 @@ void BaseController::checkUpdatesPeriodically(void)
         nameCommonStream << _id;
     
     while (!_isDone)
-    {    
+    {      
         // Subsequent attempts to get the ID, if not yet found.
         
         if (_id == 0)
@@ -130,7 +131,7 @@ void BaseController::checkUpdatesPeriodically(void)
         }
         
         else
-        {
+        {        
             // Check whether or not VPN files need to be updated (via the ThermoTrack_API_BLE_General Web API).
         
             std::stringstream uriStream;
@@ -146,12 +147,12 @@ void BaseController::checkUpdatesPeriodically(void)
                 unsigned long int sessionID = _ftpControllerPtr->startFTPControlSession(_servername_general, "RPi-Dev", "jacoistehbawsW00T!", 2000);
     
                 try
-                {
+                {                  
                     _ftpControllerPtr->getFileWithFTPControlSession(sessionID, "TT_BLE/VPN/" + nameCommonStream.str() + ".crt", "//etc/openvpn/" + nameCommonStream.str() + ".crt", 2000, 10);
                     _ftpControllerPtr->getFileWithFTPControlSession(sessionID, "TT_BLE/VPN/" + nameCommonStream.str() + ".key", "//etc/openvpn/" + nameCommonStream.str() + ".key", 2000, 10);
                     
                     std::stringstream bodyStream;        
-                    bodyStream << "{\"Update\": false}";               
+                    bodyStream << "{\"Update\": false}";
                     sendPOSTToServerURI(_servername_general, _port_general, uriStream.str(), bodyStream.str(), 2000);
                 }
                     
